@@ -84,11 +84,17 @@ defmodule SpySupervisor do
   # HELPERS #
   ###########
 
-  def start_children(child_spec_list) do
-
+  defp start_children([child_spec | rest]) do
+    case start_child(child_spec) do
+      {:ok, pid} ->
+        [{pid, child_spec} | start_children(rest)]
+      :error ->
+        {:error, "Error starting the children"}
+    end
   end
+  defp start_children([]), do: []
 
-  def start_child({mod, func, args}) do
+  defp start_child({mod, func, args}) do
     case apply(mod, func, args) do
       pid when is_pid(pid) ->
         Process.link(pid)
