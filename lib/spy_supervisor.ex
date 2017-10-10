@@ -30,7 +30,7 @@ defmodule SpySupervisor do
   the child.
   """
   def terminate_child(supervisor, pid) do
-
+    GenServer.call supervisor, {:terminate_child, pid}
   end
 
   @doc """
@@ -76,7 +76,17 @@ defmodule SpySupervisor do
         state = Map.put(pid, child_spec)
         {:reply, {:ok, pid}, state}
       :error ->
-        {:reply, {:error, "Error starting a child"}, state}
+        {:reply, {:error, "Error starting child"}, state}
+    end
+  end
+
+  def handle_call({:terminate_child, pid}, _from, state) do
+    case terminate_child(pid) do
+      :ok ->
+        new_state = Map.delete(state, pid)
+        {:reply, :ok, new_state}
+      :error ->
+        {:reply, {:error, "Error terminating child"}, state}
     end
   end
 
@@ -99,6 +109,15 @@ defmodule SpySupervisor do
       pid when is_pid(pid) ->
         Process.link(pid)
         {:ok, pid}
+      _ ->
+        :error
+    end
+  end
+
+  defp terminate_child(pid) do
+    case Process.exit(pid, :normal) do
+      true ->
+        :ok
       _ ->
         :error
     end
