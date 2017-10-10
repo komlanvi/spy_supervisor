@@ -22,7 +22,7 @@ defmodule SpySupervisor do
   start the child process and link it to the supervisor.
   """
   def start_child(supervisor, child_spec) do
-
+    GenServer.call supervisor, {:start_child, child_spec}
   end
 
   @doc """
@@ -63,10 +63,21 @@ defmodule SpySupervisor do
   ######################
 
   def init([child_spec_list]) do
+    Process.flag(:trap_exist, true)
     state = child_spec_list
     |> start_children
     |> Enum.into(%{})
     {:ok, state}
+  end
+
+  def handle_call({:start_child, child_spec}, _from, state) do
+    case start_child(child_spec) do
+      {:ok, pid} ->
+        state = Map.put(pid, child_spec)
+        {:reply, {:ok, pid}, state}
+      :error ->
+        {:reply, {:error, "Error starting a child"}, state}
+    end
   end
 
   ###########
@@ -75,5 +86,15 @@ defmodule SpySupervisor do
 
   def start_children(child_spec_list) do
 
+  end
+
+  def start_child({mod, func, args}) do
+    case apply(mod, func, args) do
+      pid when is_pid(pid) ->
+        Process.link(pid)
+        {:ok, pid}
+      _ ->
+        :error
+    end
   end
 end
