@@ -14,7 +14,7 @@ defmodule SpySupervisor do
   children
   """
   def start_link(child_spec_list) do
-
+    GenServer.start_link __MODULE__, [child_spec_list]
   end
 
   @doc """
@@ -55,6 +55,25 @@ defmodule SpySupervisor do
   supervisor.
   """
   def which_children(supervisor) do
+
+  end
+
+  ######################
+  # CALLBACK FUNCTIONS #
+  ######################
+
+  def init([child_spec_list]) do
+    state = child_spec_list
+    |> start_children
+    |> Enum.into(%{})
+    {:ok, state}
+  end
+
+  ###########
+  # HELPERS #
+  ###########
+
+  def start_children(child_spec_list) do
 
   end
 end
