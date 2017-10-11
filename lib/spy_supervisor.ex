@@ -90,6 +90,10 @@ defmodule SpySupervisor do
     end
   end
 
+  def handle_info({:EXIT, from, reason}, state) do
+    {:noreply, Map.delete(state, from)}
+  end
+
   ###########
   # HELPERS #
   ###########
@@ -115,7 +119,7 @@ defmodule SpySupervisor do
   end
 
   defp terminate_child(pid) do
-    case Process.exit(pid, :normal) do
+    case Process.exit(pid, :kill) do
       true ->
         :ok
       _ ->
