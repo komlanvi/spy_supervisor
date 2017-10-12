@@ -63,7 +63,7 @@ defmodule SpySupervisor do
   ######################
 
   def init([child_spec_list]) do
-    Process.flag(:trap_exist, true)
+    Process.flag(:trap_exit, true)
     state = child_spec_list
     |> start_children
     |> Enum.into(%{})
@@ -73,8 +73,8 @@ defmodule SpySupervisor do
   def handle_call({:start_child, child_spec}, _from, state) do
     case start_child(child_spec) do
       {:ok, pid} ->
-        state = Map.put(pid, child_spec)
-        {:reply, {:ok, pid}, state}
+        new_state = state |> Map.put(pid, child_spec)
+        {:reply, {:ok, pid}, new_state}
       :error ->
         {:reply, {:error, "Error starting child"}, state}
     end
@@ -90,7 +90,7 @@ defmodule SpySupervisor do
     end
   end
 
-  def handle_call({:restart_child, old_pid, child_spec}, _from, state) do
+  def handle_call({:restart_child, old_pid, _child_spec}, _from, state) do
     case Map.fetch(state, old_pid) do
       {:ok, child_spec} ->
         case restart_child(old_pid, child_spec) do
@@ -108,19 +108,19 @@ defmodule SpySupervisor do
   end
 
   def handle_call(:count_children, _from, state) do
-    {reply, Enum.count(state), state}
+    {:reply, Enum.count(state), state}
   end
 
   def handle_call(:which_children, _from, state) do
-    {reply, state, state}
+    {:reply, state, state}
   end
 
   def handle_info({:EXIT, pid, :killed}, state) do
-    {:no_reply, Map.delete(state, pid)}
+    {:noreply, Map.delete(state, pid)}
   end
 
   def handle_info({:EXIT, pid, :normal}, state) do
-    {:no_reply, Map.delete(state, pid)}
+    {:noreply, Map.delete(state, pid)}
   end
 
   def handle_info({:EXIT, old_pid, _reason}, state) do
@@ -131,16 +131,16 @@ defmodule SpySupervisor do
             new_state = state
                         |> Map.delete(old_pid)
                         |> Map.put(pid, child_spec)
-            {:no_reply, new_state}
+            {:noreply, new_state}
           :error ->
-            {:no_reply, state}
+            {:noreply, state}
         end
       :error ->
-        {:no_reply, state}
+        {:noreply, state}
     end
   end
 
-  def terminate(reason, state) do
+  def terminate(_reason, state) do
     terminate_children(state)
     :ok
   end
@@ -180,7 +180,7 @@ defmodule SpySupervisor do
 
   defp terminate_children(%{}), do: %{}
   defp terminate_children(state) do
-    state |> Enum.each(fn {pid, cihld_spec} -> terminate_child(pid) end)
+    state |> Enum.each(fn {pid, _child_spec} -> terminate_child(pid) end)
   end
 
   defp restart_child(pid, child_spec) do
