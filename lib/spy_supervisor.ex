@@ -115,6 +115,11 @@ defmodule SpySupervisor do
     {reply, state, state}
   end
 
+  def terminate(reason, state) do
+    terminate_children(state)
+    :ok
+  end
+
   ###########
   # HELPERS #
   ###########
@@ -146,6 +151,11 @@ defmodule SpySupervisor do
       _ ->
         :error
     end
+  end
+
+  defp terminate_children(%{}), do: %{}
+  defp terminate_children(state) do
+    state |> Enum.each(fn {pid, cihld_spec} -> terminate_child(pid) end)
   end
 
   defp restart_child(pid, child_spec) do
