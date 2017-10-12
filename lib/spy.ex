@@ -1,5 +1,5 @@
 defmodule Spy do
-  
+
   def start_link() do
     spawn(fn -> loop end)
   end
@@ -9,7 +9,7 @@ defmodule Spy do
       :stop -> :ok
       msg ->
         IO.inspect msg
-        lop
+        loop
     end
   end
 end
