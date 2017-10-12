@@ -115,6 +115,31 @@ defmodule SpySupervisor do
     {reply, state, state}
   end
 
+  def handle_info({:EXIT, pid, :killed}, state) do
+    {:no_reply, Map.delete(state, pid)}
+  end
+
+  def handle_info({:EXIT, pid, :normal}, state) do
+    {:no_reply, Map.delete(state, pid)}
+  end
+
+  def handle_info({:EXIT, old_pid, _reason}, state) do
+    case Map.fetch(state, old_pid) do
+      {:ok, child_spec} ->
+        case restart_child(old_pid, child_spec) do
+          {:ok, {pid, child_spec}} ->
+            new_state = state
+                        |> Map.delete(old_pid)
+                        |> Map.put(pid, child_spec)
+            {:no_reply, new_state}
+          :error ->
+            {:no_reply, state}
+        end
+      :error ->
+        {:no_reply, state}
+    end
+  end
+
   def terminate(reason, state) do
     terminate_children(state)
     :ok
@@ -145,7 +170,7 @@ defmodule SpySupervisor do
   end
 
   defp terminate_child(pid) do
-    case Process.exit(pid, :normal) do
+    case Process.exit(pid, :kill) do
       true ->
         :ok
       _ ->
