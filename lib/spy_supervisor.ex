@@ -47,7 +47,7 @@ defmodule SpySupervisor do
   child processes.
   """
   def count_children(supervisor) do
-
+    GenServer.call supervisor, :count_children
   end
 
   @doc """
@@ -55,7 +55,7 @@ defmodule SpySupervisor do
   supervisor.
   """
   def which_children(supervisor) do
-
+    GenServer.call supervisor, :which_children
   end
 
   ######################
@@ -105,6 +105,14 @@ defmodule SpySupervisor do
       :error ->
         {:reply, {:error, "There is no child with pid #{inspect old_pid}"}, state}
     end
+  end
+
+  def handle_call(:count_children, _from, state) do
+    {reply, Enum.count(state), state}
+  end
+
+  def handle_call(:which_children, _from, state) do
+    {reply, state, state}
   end
 
   ###########
