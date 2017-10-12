@@ -39,7 +39,7 @@ defmodule SpySupervisor do
   the child process with the child specification.
   """
   def restart_child(supervisor, pid, child_spec) do
-
+    GenServer.call supervisor, {:restart_child, pid, child_spec}
   end
 
   @doc """
@@ -90,6 +90,23 @@ defmodule SpySupervisor do
     end
   end
 
+  def handle_call({:restart_child, old_pid, child_spec}, _from, state) do
+    case Map.fetch(state, old_pid) do
+      {:ok, child_spec} ->
+        case restart_child(old_pid, child_spec) do
+          {:ok, {pid, child_spec}} ->
+            new_state = state
+            |> Map.delete(old_pid)
+            |> Map.put(pid, child_spec)
+            {:reply, {:ok, pid}, new_state}
+          :error ->
+            {:reply, {:error, "Error restarting child"}, state}
+        end
+      :error ->
+        {:reply, {:error, "There is no child with pid #{inspect old_pid}"}, state}
+    end
+  end
+
   ###########
   # HELPERS #
   ###########
@@ -119,6 +136,20 @@ defmodule SpySupervisor do
       true ->
         :ok
       _ ->
+        :error
+    end
+  end
+
+  defp restart_child(pid, child_spec) do
+    case terminate_child(pid) do
+      :ok ->
+        case start_child(child_spec) do
+          {:ok, pid} ->
+            {:ok, {pid, child_spec}}
+          :error ->
+            :error
+        end
+      :error ->
         :error
     end
   end
