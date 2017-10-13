@@ -39,7 +39,7 @@ defmodule SpySupervisor do
   the child process with the child specification.
   """
   def restart_child(supervisor, pid, child_spec) do
-
+    GenServer.call supervisor, {:restart_child, pid, child_spec}
   end
 
   @doc """
@@ -47,7 +47,7 @@ defmodule SpySupervisor do
   child processes.
   """
   def count_children(supervisor) do
-
+    GenServer.call supervisor, :count_children
   end
 
   @doc """
@@ -55,7 +55,7 @@ defmodule SpySupervisor do
   supervisor.
   """
   def which_children(supervisor) do
-
+    GenServer.call supervisor, :which_children
   end
 
   ######################
@@ -63,7 +63,7 @@ defmodule SpySupervisor do
   ######################
 
   def init([child_spec_list]) do
-    Process.flag(:trap_exist, true)
+    Process.flag(:trap_exit, true)
     state = child_spec_list
     |> start_children
     |> Enum.into(%{})
@@ -73,8 +73,8 @@ defmodule SpySupervisor do
   def handle_call({:start_child, child_spec}, _from, state) do
     case start_child(child_spec) do
       {:ok, pid} ->
-        state = Map.put(pid, child_spec)
-        {:reply, {:ok, pid}, state}
+        new_state = state |> Map.put(pid, child_spec)
+        {:reply, {:ok, pid}, new_state}
       :error ->
         {:reply, {:error, "Error starting child"}, state}
     end
@@ -90,8 +90,59 @@ defmodule SpySupervisor do
     end
   end
 
-  def handle_info({:EXIT, from, reason}, state) do
-    {:noreply, Map.delete(state, from)}
+  def handle_call({:restart_child, old_pid, _child_spec}, _from, state) do
+    case Map.fetch(state, old_pid) do
+      {:ok, child_spec} ->
+        case restart_child(old_pid, child_spec) do
+          {:ok, {pid, child_spec}} ->
+            new_state = state
+            |> Map.delete(old_pid)
+            |> Map.put(pid, child_spec)
+            {:reply, {:ok, pid}, new_state}
+          :error ->
+            {:reply, {:error, "Error restarting child"}, state}
+        end
+      :error ->
+        {:reply, {:error, "There is no child with pid #{inspect old_pid}"}, state}
+    end
+  end
+
+  def handle_call(:count_children, _from, state) do
+    {:reply, Enum.count(state), state}
+  end
+
+  def handle_call(:which_children, _from, state) do
+    {:reply, state, state}
+  end
+
+  def handle_info({:EXIT, pid, :killed}, state) do
+    {:noreply, Map.delete(state, pid)}
+  end
+
+  def handle_info({:EXIT, pid, :normal}, state) do
+    {:noreply, Map.delete(state, pid)}
+  end
+
+  def handle_info({:EXIT, old_pid, _reason}, state) do
+    case Map.fetch(state, old_pid) do
+      {:ok, child_spec} ->
+        case restart_child(old_pid, child_spec) do
+          {:ok, {pid, child_spec}} ->
+            new_state = state
+                        |> Map.delete(old_pid)
+                        |> Map.put(pid, child_spec)
+            {:noreply, new_state}
+          :error ->
+            {:noreply, state}
+        end
+      :error ->
+        {:noreply, state}
+    end
+  end
+
+  def terminate(_reason, state) do
+    terminate_children(state)
+    :ok
   end
 
   ###########
@@ -123,6 +174,25 @@ defmodule SpySupervisor do
       true ->
         :ok
       _ ->
+        :error
+    end
+  end
+
+  defp terminate_children(%{}), do: %{}
+  defp terminate_children(state) do
+    state |> Enum.each(fn {pid, _child_spec} -> terminate_child(pid) end)
+  end
+
+  defp restart_child(pid, child_spec) do
+    case terminate_child(pid) do
+      :ok ->
+        case start_child(child_spec) do
+          {:ok, pid} ->
+            {:ok, {pid, child_spec}}
+          :error ->
+            :error
+        end
+      :error ->
         :error
     end
   end
